@@ -52,23 +52,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
     }
     
-    if (request.action === 'saveToken') {
-        // 保存Token到后端
-        saveTokenToBackend(request.token, sender.url).then((result) => {
-            sendResponse(result);
-        });
-        return true;
-    }
-    
-    if (request.action === 'openTokenPage') {
-        // 打开Token页面
-        chrome.tabs.create({
-            url: 'https://windsurf.com/editor/show-auth-token?workflow=',
-            active: true
-        });
-        return true;
-    }
-    
     return false;
 });
 
@@ -81,50 +64,3 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
     }
 });
-
-// 保存Token到后端
-async function saveTokenToBackend(token, pageUrl) {
-    try {
-        // 获取后端URL
-        const settings = await chrome.storage.sync.get(['backendUrl']);
-        const backendUrl = settings.backendUrl || 'https://windsurf-auto-register.onrender.com';
-        
-        console.log('🔓 准备保存Token到后端...');
-        console.log('🔓 后端URL:', backendUrl);
-        console.log('🔓 Token长度:', token.length);
-        
-        const response = await fetch(`${backendUrl}/api/save-token`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': 'wsr-2024-7k9m2n5p8q1r4t6v9x2z5c8f1h4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9c2f5i8l1o4r7u0x3a6d9g2j5m8p1s4v7y0b3e6h9k2n5q8t1w4z7c0f3i6l9o2r5u8x1a4d7g0j3m6p9s2v5y8b1e4h7k0n3q6t9w2z5c8f1i4l7o0r3u6x9a2d5g8j1m4p7s0v3y6b9e2h5k8n1q4t7w0z3c6f9i2l5o8r1u4x7a0d3g6j9m2p5s8v1y4b7e0h3k6n9q2t5w8z1c4f7i0l3o6r9u2x5a8d1g4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9'
-            },
-            body: JSON.stringify({
-                token: token,
-                pageUrl: pageUrl,
-                timestamp: new Date().toISOString()
-            })
-        });
-        
-        console.log('🔍 响应状态:', response.status);
-        console.log('🔍 响应OK:', response.ok);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('🔍 响应数据:', data);
-        
-        if (data.success) {
-            console.log('✅ Token已保存到后端');
-            return { success: true };
-        } else {
-            console.error('❌ Token保存失败:', data.error);
-            return { success: false, error: data.error };
-        }
-    } catch (error) {
-        console.error('❌ 保存Token出错:', error);
-        return { success: false, error: error.message };
-    }
-}

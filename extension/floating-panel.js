@@ -24,9 +24,7 @@
     // 检查当前页面类型
     function getCurrentPageType() {
         const url = window.location.href;
-        if (url.includes('show-auth-token')) {
-            return 'token';
-        } else if (url.includes('register') || url.includes('account')) {
+        if (url.includes('register') || url.includes('account')) {
             return 'register';
         }
         return 'unknown';
@@ -58,11 +56,6 @@
                 
                 setupEventListeners(pageType);
                 loadSavedData();
-                
-                // 如果是Token页面，显示Token获取状态
-                if (pageType === 'token') {
-                    showTokenPageStatus();
-                }
             })
             .catch(error => {
                 console.error('❌ 加载悬浮窗HTML失败:', error);
@@ -632,23 +625,9 @@
                             console.log('找到验证码:', code);
                             addLog('✅ 验证码已获取', 'success');
                             
-                            // 先自动打开Token页面获取Token
-                            addLog('🔓 正在打开Token页面获取Token...', 'info');
-                            setTimeout(() => {
-                                console.log('🔓 自动打开Token页面...');
-                                chrome.tabs.create({
-                                    url: 'https://windsurf.com/editor/show-auth-token?workflow=',
-                                    active: true
-                                });
-                            }, 1000);
-                            
-                            // 等待Token被提取并保存（content.js会自动处理）
-                            // 然后再保存账号
-                            setTimeout(() => {
-                                addLog('💾 开始保存账号到后端...', 'info');
-                                saveAccountToBackend();
-                            }, 5000);
-                            
+                            // 保存账号到后端
+                            addLog('💾 开始保存账号到后端...', 'info');
+                            saveAccountToBackend();
                         }
                     }
                 }
@@ -749,113 +728,6 @@
 
         updateStatus('数据已清除', 'success');
         addLog('邮箱和密码已清除', 'success');
-    }
-
-    // Token页面状态显示
-    function showTokenPageStatus() {
-        console.log('🔓 显示Token页面状态');
-        
-        // 隐藏注册相关按钮
-        const startBtn = document.getElementById('start-register-btn');
-        const checkCodeBtn = document.getElementById('check-code-btn');
-        if (startBtn) startBtn.style.display = 'none';
-        if (checkCodeBtn) checkCodeBtn.style.display = 'none';
-        
-        // 更新状态显示
-        updateStatus('🔓 Token页面已打开', 'info');
-        addLog('🔓 正在自动提取Token...', 'info');
-        addLog('💡 Token提取完成后会自动保存', 'info');
-        
-        // 监听Token提取结果
-        window.addEventListener('tokenExtracted', (event) => {
-            if (event.detail.success) {
-                updateStatus('✅ Token已成功获取并保存', 'success');
-                addLog('✅ Token已自动保存到后端', 'success');
-                addLog('🎉 注册流程全部完成！', 'success');
-            } else {
-                if (event.detail.isAuthError) {
-                    updateStatus('🔑 API认证失败', 'warning');
-                    addLog('🔑 检测到API认证问题', 'warning');
-                    addLog('✅ 但Token已成功提取！', 'success');
-                    addLog('💡 请使用手动保存功能：', 'info');
-                    
-                    // 显示手动保存Token按钮，并预填Token
-                    showManualTokenButton(event.detail.token);
-                } else {
-                    updateStatus('⚠️ Token提取失败', 'warning');
-                    addLog('⚠️ 自动提取失败，请手动操作：', 'warning');
-                    addLog('1. 复制页面上的Token', 'info');
-                    addLog('2. 点击下方"手动保存Token"按钮', 'info');
-                    
-                    // 显示手动保存Token按钮
-                    showManualTokenButton();
-                }
-            }
-        });
-    }
-    
-    // 显示手动保存Token按钮
-    function showManualTokenButton(prefilledToken = '') {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = 'margin: 10px 0; text-align: center;';
-        
-        const manualTokenBtn = document.createElement('button');
-        manualTokenBtn.textContent = prefilledToken ? '✅ 保存已提取的Token' : '📋 手动保存Token';
-        manualTokenBtn.style.cssText = `
-            background: ${prefilledToken ? '#28a745' : '#ff6b35'};
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        `;
-        
-        manualTokenBtn.onclick = () => {
-            if (prefilledToken) {
-                // 直接保存预填的Token
-                saveManualToken(prefilledToken);
-            } else {
-                // 提示用户输入Token
-                const token = prompt('请粘贴Token:');
-                if (token && token.trim()) {
-                    saveManualToken(token.trim());
-                }
-            }
-        };
-        
-        buttonContainer.appendChild(manualTokenBtn);
-        
-        // 添加到日志容器下方
-        const logsContainer = document.getElementById('logs-container');
-        if (logsContainer && logsContainer.parentNode) {
-            logsContainer.parentNode.insertBefore(buttonContainer, logsContainer.nextSibling);
-        }
-    }
-    
-    // 手动保存Token
-    async function saveManualToken(token) {
-        try {
-            addLog('🔄 正在保存Token...', 'info');
-            
-            // 发送Token到后端
-            chrome.runtime.sendMessage({
-                action: 'saveToken',
-                token: token
-            }, (response) => {
-                if (response && response.success) {
-                    updateStatus('✅ Token已手动保存成功', 'success');
-                    addLog('✅ Token已保存到后端', 'success');
-                    addLog('🎉 注册流程全部完成！', 'success');
-                } else {
-                    updateStatus('❌ Token保存失败', 'error');
-                    addLog('❌ 保存失败，请重试', 'error');
-                }
-            });
-        } catch (error) {
-            console.error('手动保存Token失败:', error);
-            addLog('❌ 保存出错，请重试', 'error');
-        }
     }
 
     // 监听来自 background 的消息

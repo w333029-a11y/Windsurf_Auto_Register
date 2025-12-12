@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Windsurf 自动注册助手",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "自动化注册 Windsurf 账号，自动获取验证码，账号管理 with temporary email",
   "permissions": [
     "storage",
@@ -24,8 +24,7 @@
     {
       "matches": [
         "https://windsurf.com/account/register*",
-        "https://windsurf.com/account/*",
-        "https://windsurf.com/editor/show-auth-token*"
+        "https://windsurf.com/account/*"
       ],
       "js": ["config.private.js", "config.js", "api-helper.js", "content.js", "auto-monitor.js", "floating-panel.js"],
       "run_at": "document_end"
