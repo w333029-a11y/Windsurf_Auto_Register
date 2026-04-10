@@ -8,26 +8,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || 'wsr-2024-default-key';
 
-// 信任代理（Render 环境需要）
 app.set('trust proxy', 1);
 
-// 安全中间件（宽松配置，允许跨域）
 app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://www.1secmail.com"]
-        }
-    },
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: false
 }));
 
-// CORS配置
 app.use(cors({
     origin: true,
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -35,17 +24,16 @@ app.use(cors({
     credentials: true
 }));
 
-// 限流配置
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15分钟
-    max: 100, // 每个IP最多100个请求
-    message: { success: false, error: '请求过于频繁，请稍后再试' }
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { success: false, error: '请求过于频繁，请稍后再试' },
+    validate: { xForwardedForHeader: false }
 });
 app.use(limiter);
 
 app.use(express.json());
 
-// API密钥验证中间件
 const validateApiKey = (req, res, next) => {
     const providedKey = req.headers['x-api-key'];
     if (!providedKey || providedKey !== API_KEY) {
@@ -57,20 +45,45 @@ const validateApiKey = (req, res, next) => {
     next();
 };
 
-// 健康检查
+const FETCH_OPTIONS = {
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive'
+    },
+    timeout: 15000
+};
+
 app.get('/api/test', (req, res) => {
     res.json({
         success: true,
         message: '服务运行正常',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        apiKey: API_KEY.substring(0, 10) + '...'
     });
 });
 
-// 生成临时邮箱
 app.post('/api/generate-email', validateApiKey, async (req, res) => {
     try {
-        const response = await fetch('https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1');
+        console.log('[生成邮箱] 开始请求 1secmail API...');
+        
+        const response = await fetch(
+            'https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1',
+            FETCH_OPTIONS
+        );
+        
+        console.log('[生成邮箱] 响应状态:', response.status);
+        
+        if (!response.ok) {
+            const text = await response.text();
+            console.error('[生成邮箱] API 返回错误:', text);
+            throw new Error(`1secmail API 错误 (${response.status}): ${text.substring(0, 100)}`);
+        }
+        
         const data = await response.json();
+        console.log('[生成邮箱] API 返回数据:', data);
         
         if (data && data.length > 0) {
             const email = data[0];
@@ -83,10 +96,10 @@ app.post('/api/generate-email', validateApiKey, async (req, res) => {
                 domain: domain
             });
         } else {
-            throw new Error('生成邮箱失败');
+            throw new Error('生成邮箱失败: API 返回空数据');
         }
     } catch (error) {
-        console.error('生成邮箱错误:', error);
+        console.error('[生成邮箱] 错误:', error.message);
         res.status(500).json({
             success: false,
             error: '生成邮箱失败: ' + error.message
@@ -94,7 +107,6 @@ app.post('/api/generate-email', validateApiKey, async (req, res) => {
     }
 });
 
-// 获取邮件列表
 app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
     try {
         const { email } = req.params;
@@ -107,10 +119,21 @@ app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
             });
         }
         
+        console.log(`[获取邮件] 邮箱: ${email}`);
+        
         const response = await fetch(
-            `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`
+            `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`,
+            FETCH_OPTIONS
         );
+        
+        if (!response.ok) {
+            const text = await response.text();
+            console.error('[获取邮件] API 返回错误:', text);
+            throw new Error(`1secmail API 错误 (${response.status})`);
+        }
+        
         const messages = await response.json();
+        console.log(`[获取邮件] 找到 ${messages ? messages.length : 0} 封邮件`);
         
         res.json({
             success: true,
@@ -118,7 +141,7 @@ app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
             count: messages ? messages.length : 0
         });
     } catch (error) {
-        console.error('获取邮件列表错误:', error);
+        console.error('[获取邮件] 错误:', error.message);
         res.status(500).json({
             success: false,
             error: '获取邮件列表失败: ' + error.message
@@ -126,7 +149,6 @@ app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
     }
 });
 
-// 获取邮件详情
 app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) => {
     try {
         const { email, messageId } = req.params;
@@ -139,18 +161,27 @@ app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) =
             });
         }
         
+        console.log(`[获取邮件详情] 邮箱: ${email}, 消息ID: ${messageId}`);
+        
         const response = await fetch(
-            `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${messageId}`
+            `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${messageId}`,
+            FETCH_OPTIONS
         );
+        
+        if (!response.ok) {
+            const text = await response.text();
+            console.error('[获取邮件详情] API 返回错误:', text);
+            throw new Error(`1secmail API 错误 (${response.status})`);
+        }
+        
         const message = await response.json();
         
-        // 提取验证码
         let verificationCode = null;
         if (message && message.body) {
-            //  Windsurf 验证码格式：通常是 6 位数字或字母
             const codeMatch = message.body.match(/\b[A-Z0-9]{6}\b/);
             if (codeMatch) {
                 verificationCode = codeMatch[0];
+                console.log(`[获取邮件详情] 找到验证码: ${verificationCode}`);
             }
         }
         
@@ -160,7 +191,7 @@ app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) =
             verificationCode: verificationCode
         });
     } catch (error) {
-        console.error('获取邮件详情错误:', error);
+        console.error('[获取邮件详情] 错误:', error.message);
         res.status(500).json({
             success: false,
             error: '获取邮件详情失败: ' + error.message
@@ -168,12 +199,11 @@ app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) =
     }
 });
 
-// 等待验证码（轮询）
 app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
     try {
         const { email } = req.params;
-        const maxAttempts = 30; // 最多尝试30次
-        const interval = 3000; // 每3秒检查一次
+        const maxAttempts = 30;
+        const interval = 3000;
         
         const [username, domain] = email.split('@');
         
@@ -184,31 +214,38 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
             });
         }
         
-        // 设置响应超时（90秒）
+        console.log(`[等待验证码] 开始等待: ${email}`);
+        
         res.setTimeout(90000);
         
         let attempts = 0;
         const checkMessages = async () => {
             try {
                 const response = await fetch(
-                    `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`
+                    `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`,
+                    FETCH_OPTIONS
                 );
+                
+                if (!response.ok) {
+                    throw new Error(`API 错误 (${response.status})`);
+                }
+                
                 const messages = await response.json();
                 
                 if (messages && messages.length > 0) {
-                    // 获取最新邮件的详情
                     const latestMessage = messages[0];
                     const detailResponse = await fetch(
-                        `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${latestMessage.id}`
+                        `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${latestMessage.id}`,
+                        FETCH_OPTIONS
                     );
                     const detail = await detailResponse.json();
                     
-                    // 提取验证码
                     let verificationCode = null;
                     if (detail && detail.body) {
                         const codeMatch = detail.body.match(/\b[A-Z0-9]{6}\b/);
                         if (codeMatch) {
                             verificationCode = codeMatch[0];
+                            console.log(`[等待验证码] 找到验证码: ${verificationCode}`);
                         }
                     }
                     
@@ -220,6 +257,8 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
                 }
                 
                 attempts++;
+                console.log(`[等待验证码] 尝试 ${attempts}/${maxAttempts}`);
+                
                 if (attempts >= maxAttempts) {
                     return res.status(408).json({
                         success: false,
@@ -227,10 +266,9 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
                     });
                 }
                 
-                // 继续轮询
                 setTimeout(checkMessages, interval);
             } catch (error) {
-                console.error('轮询错误:', error);
+                console.error('[等待验证码] 轮询错误:', error.message);
                 return res.status(500).json({
                     success: false,
                     error: '检查邮件时出错: ' + error.message
@@ -238,10 +276,9 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
             }
         };
         
-        // 开始轮询
         checkMessages();
     } catch (error) {
-        console.error('等待验证码错误:', error);
+        console.error('[等待验证码] 错误:', error.message);
         res.status(500).json({
             success: false,
             error: '等待验证码失败: ' + error.message
@@ -249,16 +286,14 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
     }
 });
 
-// 错误处理中间件
 app.use((err, req, res, next) => {
-    console.error('服务器错误:', err);
+    console.error('[服务器] 未捕获的错误:', err);
     res.status(500).json({
         success: false,
-        error: '服务器内部错误'
+        error: '服务器内部错误: ' + err.message
     });
 });
 
-// 启动服务器
 app.listen(PORT, () => {
     console.log(`🚀 服务器运行在端口 ${PORT}`);
     console.log(`📧 API密钥: ${API_KEY.substring(0, 10)}...`);
