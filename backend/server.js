@@ -66,18 +66,30 @@ async function getMailDomains() {
     }
     
     try {
+        console.log('[获取域名] 开始请求 Mail.tm domains API...');
         const response = await fetch(`${MAIL_TM_API}/domains`, FETCH_OPTIONS);
         const data = await response.json();
         
+        console.log('[获取域名] API 响应:', JSON.stringify(data));
+        
         if (data['hydra:member'] && data['hydra:member'].length > 0) {
-            cachedDomains = data['hydra:member'].map(d => d.domain);
-            domainCacheTime = now;
-            return cachedDomains;
+            const domains = data['hydra:member']
+                .filter(d => d.isActive && !d.isPrivate)
+                .map(d => d.domain);
+            
+            if (domains.length > 0) {
+                cachedDomains = domains;
+                domainCacheTime = now;
+                console.log('[获取域名] 可用域名:', domains);
+                return cachedDomains;
+            }
         }
-        return ['mail.tm'];
+        
+        console.log('[获取域名] 使用备用域名');
+        return ['deltajohnsons.com', 'mailtoplus.com'];
     } catch (error) {
         console.error('[获取域名] 错误:', error.message);
-        return ['mail.tm'];
+        return ['deltajohnsons.com', 'mailtoplus.com'];
     }
 }
 
