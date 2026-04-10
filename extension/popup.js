@@ -125,10 +125,30 @@ function updateStep(stepNumber, status) {
 }
 
 function displayEmail(email) {
-    emailText.textContent = email;
-    emailDisplay.style.display = 'block';
-    checkCodeBtn.style.display = 'block';
-    document.getElementById('clearDataBtn').style.display = 'block';
+    console.log('[displayEmail] 显示邮箱:', email);
+    console.log('[displayEmail] emailText 元素:', emailText);
+    console.log('[displayEmail] emailDisplay 元素:', emailDisplay);
+    
+    if (emailText) {
+        emailText.textContent = email;
+        console.log('[displayEmail] emailText.textContent 已设置');
+    } else {
+        console.error('[displayEmail] emailText 元素未找到!');
+    }
+    
+    if (emailDisplay) {
+        emailDisplay.style.display = 'block';
+        console.log('[displayEmail] emailDisplay 已显示');
+    }
+    
+    if (checkCodeBtn) {
+        checkCodeBtn.style.display = 'block';
+    }
+    
+    const clearBtn = document.getElementById('clearDataBtn');
+    if (clearBtn) {
+        clearBtn.style.display = 'block';
+    }
 }
 
 function clearRegistrationData() {
@@ -311,6 +331,8 @@ async function startAutoRegister() {
         
         updateStep(1, 'completed');
         addLog('步骤1完成', 'success');
+        
+        displayEmail(email);
         
         updateStep(2, 'active');
         updateStatus('步骤2: 填写注册信息...', 'info');

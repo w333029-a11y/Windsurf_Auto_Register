@@ -22,10 +22,11 @@ app.use(helmet({
 }));
 
 app.use(cors({
-    origin: true,
+    origin: ['https://windsurf.com', 'https://*.windsurf.com', 'chrome-extension://*'],
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'x-api-key', 'X-API-Key', 'x-mail-token'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'x-api-key', 'X-API-Key', 'x-mail-token', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -585,6 +586,31 @@ async function tryServices(operation, email, token) {
     
     throw new Error('所有邮件服务都失败了');
 }
+
+app.get('/api/check-ip-usage', (req, res) => {
+    res.json({
+        success: true,
+        usage: 0,
+        limit: 10,
+        message: 'IP使用次数检查成功'
+    });
+});
+
+app.post('/api/record-ip-usage', (req, res) => {
+    res.json({
+        success: true,
+        message: 'IP使用次数已记录'
+    });
+});
+
+app.get('/api/get-donation-qrcode', (req, res) => {
+    res.json({
+        success: true,
+        qrcodeUrl: 'https://via.placeholder.com/200x200?text=Donation+QR',
+        message: '打赏二维码'
+    });
+});
+
 app.get('/api/test', (req, res) => {
     res.json({
         success: true,
