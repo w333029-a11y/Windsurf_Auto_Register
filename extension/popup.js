@@ -1,8 +1,8 @@
 let currentEmail = null;
 let currentPassword = null;
-let backendUrl = 'https://windsurf-auto-register.onrender.com';
+let mailToken = null;
+let backendUrl = 'https://windsurf-auto-register-backend.onrender.com';
 
-// DOM 元素
 const statusDiv = document.getElementById('status');
 const emailDisplay = document.getElementById('emailDisplay');
 const emailText = document.getElementById('emailText');
@@ -17,7 +17,6 @@ const backendUrlInput = document.getElementById('backendUrl');
 const progressSteps = document.getElementById('progressSteps');
 const logsDiv = document.getElementById('logs');
 
-// 初始化
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[Popup] 初始化...');
     loadSettings();
@@ -31,13 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     backendUrlInput.addEventListener('change', saveSettings);
 });
 
-// 测试后端连接
 async function testBackendConnection() {
     try {
         const response = await fetch(`${backendUrl}/api/test`, {
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'wsr-2024-7k9m2n5p8q1r4t6v9x2z5c8f1h4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9c2f5i8l1o4r7u0x3a6d9g2j5m8p1s4v7y0b3e6h9k2n5q8t1w4z7c0f3i6l9o2r5u8x1a4d7g0j3m6p9s2v5y8b1e4h7k0n3q6t9w2z5c8f1i4l7o0r3u6x9a2d5g8j1m4p7s0v3y6b9e2h5k8n1q4t7w0z3c6f9i2l5o8r1u4x7a0d3g6j9m2p5s8v1y4b7e0h3k6n9q2t5w8z1c4f7i0l3o6r9u2x5a8d1g4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9'
+                'x-api-key': '114239wmj'
             }
         });
         const data = await response.json();
@@ -52,70 +50,60 @@ async function testBackendConnection() {
     }
 }
 
-// 加载设置
 function loadSettings() {
-    // 使用 sync 读取后端URL
     chrome.storage.sync.get(['backendUrl'], (syncResult) => {
         if (syncResult.backendUrl) {
             backendUrl = syncResult.backendUrl;
             backendUrlInput.value = backendUrl;
         }
         
-        // 使用 local 读取临时数据
-        chrome.storage.local.get(['currentEmail', 'currentPassword', 'registrationInProgress'], (result) => {
+        chrome.storage.local.get(['currentEmail', 'currentPassword', 'mailToken', 'registrationInProgress'], (result) => {
             if (result.currentEmail) {
                 currentEmail = result.currentEmail;
                 displayEmail(currentEmail);
-                // 不显示恢复日志，保持界面简洁
             }
             if (result.currentPassword) {
                 currentPassword = result.currentPassword;
                 passwordText.textContent = currentPassword;
                 passwordDisplay.style.display = 'block';
                 document.getElementById('clearDataBtn').style.display = 'block';
-                // 不显示恢复日志，保持界面简洁
+            }
+            if (result.mailToken) {
+                mailToken = result.mailToken;
             }
             if (result.registrationInProgress) {
-                // 简化提示，不要太多警告
                 updateStatus('上次数据已恢复', 'info');
             }
         });
     });
 }
 
-// 生成随机密码
 function generatePassword() {
     const length = 12;
     const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
     let password = '';
-    // 确保至少有一个大写字母、小写字母、数字
     password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.charAt(Math.floor(Math.random() * 26));
     password += 'abcdefghijklmnopqrstuvwxyz'.charAt(Math.floor(Math.random() * 26));
     password += '0123456789'.charAt(Math.floor(Math.random() * 10));
     
-    // 填充剩余字符
     for (let i = password.length; i < length; i++) {
         password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     
-    // 打乱顺序
     return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
-// 保存设置
 function saveSettings() {
     backendUrl = backendUrlInput.value;
     chrome.storage.sync.set({ backendUrl });
     addLog('设置已保存', 'success');
 }
 
-// 更新状态
 function updateStatus(message, type = 'info') {
     statusDiv.textContent = message;
     statusDiv.className = `status ${type}`;
 }
 
-// 添加日志
 function addLog(message, type = 'info') {
     logsDiv.style.display = 'block';
     const logEntry = document.createElement('div');
@@ -129,7 +117,6 @@ function addLog(message, type = 'info') {
     }
 }
 
-// 更新步骤状态
 function updateStep(stepNumber, status) {
     const step = document.getElementById(`step${stepNumber}`);
     if (step) {
@@ -137,7 +124,6 @@ function updateStep(stepNumber, status) {
     }
 }
 
-// 显示邮箱
 function displayEmail(email) {
     emailText.textContent = email;
     emailDisplay.style.display = 'block';
@@ -145,7 +131,6 @@ function displayEmail(email) {
     document.getElementById('clearDataBtn').style.display = 'block';
 }
 
-// 清除注册数据
 function clearRegistrationData() {
     if (!confirm('确定要清除当前的邮箱和密码吗？')) {
         return;
@@ -153,8 +138,9 @@ function clearRegistrationData() {
     
     currentEmail = null;
     currentPassword = null;
+    mailToken = null;
     
-    chrome.storage.local.remove(['currentEmail', 'currentPassword', 'registrationInProgress', 'registrationStartTime', 'emailGeneratedTime']);
+    chrome.storage.local.remove(['currentEmail', 'currentPassword', 'mailToken', 'registrationInProgress', 'registrationStartTime', 'emailGeneratedTime']);
     
     emailDisplay.style.display = 'none';
     passwordDisplay.style.display = 'none';
@@ -165,7 +151,6 @@ function clearRegistrationData() {
     addLog('邮箱和密码已清除', 'success');
 }
 
-// 复制邮箱
 function copyEmail() {
     navigator.clipboard.writeText(currentEmail).then(() => {
         copyEmailBtn.textContent = '已复制!';
@@ -175,7 +160,6 @@ function copyEmail() {
     });
 }
 
-// 复制密码
 function copyPassword() {
     navigator.clipboard.writeText(currentPassword).then(() => {
         copyPasswordBtn.textContent = '已复制!';
@@ -185,7 +169,6 @@ function copyPassword() {
     });
 }
 
-// 生成临时邮箱
 async function generateEmail() {
     try {
         console.log('[Popup] 开始生成邮箱...');
@@ -200,7 +183,7 @@ async function generateEmail() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'wsr-2024-7k9m2n5p8q1r4t6v9x2z5c8f1h4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9c2f5i8l1o4r7u0x3a6d9g2j5m8p1s4v7y0b3e6h9k2n5q8t1w4z7c0f3i6l9o2r5u8x1a4d7g0j3m6p9s2v5y8b1e4h7k0n3q6t9w2z5c8f1i4l7o0r3u6x9a2d5g8j1m4p7s0v3y6b9e2h5k8n1q4t7w0z3c6f9i2l5o8r1u4x7a0d3g6j9m2p5s8v1y4b7e0h3k6n9q2t5w8z1c4f7i0l3o6r9u2x5a8d1g4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9'
+                'x-api-key': '114239wmj'
             }
         });
         
@@ -210,16 +193,20 @@ async function generateEmail() {
         
         if (data.success) {
             currentEmail = data.email;
+            mailToken = data.token;
+            
             chrome.storage.local.set({ 
                 currentEmail,
+                mailToken,
                 emailGeneratedTime: Date.now()
             });
+            
             displayEmail(currentEmail);
             updateStatus('临时邮箱生成成功!', 'success');
             addLog(`邮箱生成成功: ${currentEmail}`, 'success');
             addLog('💡 提示: 邮箱和密码会自动保存，关闭弹窗后仍然保留', 'info');
             console.log('[Popup] 邮箱生成成功:', currentEmail);
-            return currentEmail;
+            return data;
         } else {
             throw new Error(data.error || '生成邮箱失败');
         }
@@ -233,10 +220,14 @@ async function generateEmail() {
     }
 }
 
-// 检查验证码
 async function checkVerificationCode() {
     if (!currentEmail) {
         updateStatus('请先生成邮箱', 'warning');
+        return;
+    }
+    
+    if (!mailToken) {
+        updateStatus('缺少邮件令牌，请重新生成邮箱', 'warning');
         return;
     }
     
@@ -249,7 +240,8 @@ async function checkVerificationCode() {
         const response = await fetch(`${backendUrl}/api/get-messages/${encodeURIComponent(currentEmail)}`, {
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'wsr-2024-7k9m2n5p8q1r4t6v9x2z5c8f1h4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9c2f5i8l1o4r7u0x3a6d9g2j5m8p1s4v7y0b3e6h9k2n5q8t1w4z7c0f3i6l9o2r5u8x1a4d7g0j3m6p9s2v5y8b1e4h7k0n3q6t9w2z5c8f1i4l7o0r3u6x9a2d5g8j1m4p7s0v3y6b9e2h5k8n1q4t7w0z3c6f9i2l5o8r1u4x7a0d3g6j9m2p5s8v1y4b7e0h3k6n9q2t5w8z1c4f7i0l3o6r9u2x5a8d1g4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9'
+                'x-api-key': '114239wmj',
+                'x-mail-token': mailToken
             }
         });
         const data = await response.json();
@@ -263,7 +255,8 @@ async function checkVerificationCode() {
                 {
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': 'wsr-2024-7k9m2n5p8q1r4t6v9x2z5c8f1h4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9c2f5i8l1o4r7u0x3a6d9g2j5m8p1s4v7y0b3e6h9k2n5q8t1w4z7c0f3i6l9o2r5u8x1a4d7g0j3m6p9s2v5y8b1e4h7k0n3q6t9w2z5c8f1i4l7o0r3u6x9a2d5g8j1m4p7s0v3y6b9e2h5k8n1q4t7w0z3c6f9i2l5o8r1u4x7a0d3g6j9m2p5s8v1y4b7e0h3k6n9q2t5w8z1c4f7i0l3o6r9u2x5a8d1g4j7m0p3s6v9y2b5e8h1k4n7q0t3w6z9'
+                        'x-api-key': '114239wmj',
+                        'x-mail-token': mailToken
                     }
                 }
             );
@@ -298,7 +291,6 @@ async function checkVerificationCode() {
     }
 }
 
-// 开始自动注册
 async function startAutoRegister() {
     try {
         startBtn.disabled = true;
@@ -308,11 +300,14 @@ async function startAutoRegister() {
         
         updateStep(1, 'active');
         updateStatus('步骤1: 生成临时邮箱...', 'info');
-        const email = await generateEmail();
+        const emailData = await generateEmail();
         
-        if (!email) {
+        if (!emailData || !emailData.email) {
             throw new Error('生成邮箱失败');
         }
+        
+        const email = emailData.email;
+        mailToken = emailData.token;
         
         updateStep(1, 'completed');
         addLog('步骤1完成', 'success');
@@ -320,12 +315,12 @@ async function startAutoRegister() {
         updateStep(2, 'active');
         updateStatus('步骤2: 填写注册信息...', 'info');
         
-        // 生成密码并显示
         currentPassword = generatePassword();
         passwordText.textContent = currentPassword;
         passwordDisplay.style.display = 'block';
         chrome.storage.local.set({ 
             currentPassword,
+            mailToken,
             registrationInProgress: true,
             registrationStartTime: Date.now()
         });
@@ -339,7 +334,6 @@ async function startAutoRegister() {
             const tab = tabs[0];
             addLog(`当前页面: ${tab.url}`);
             
-            // 检查是否在注册页面
             if (!tab.url || !tab.url.includes('windsurf.com')) {
                 updateStatus('错误: 请在Windsurf注册页面使用', 'error');
                 addLog('错误: 不在Windsurf页面', 'error');
@@ -359,7 +353,6 @@ async function startAutoRegister() {
                     console.error('消息发送失败:', chrome.runtime.lastError);
                     addLog(`消息发送失败: ${chrome.runtime.lastError.message}`, 'error');
                     
-                    // 尝试重新注入content script
                     addLog('尝试重新注入content script...', 'warning');
                     try {
                         await chrome.scripting.executeScript({
@@ -368,10 +361,8 @@ async function startAutoRegister() {
                         });
                         addLog('Content script已重新注入', 'success');
                         
-                        // 等待一下再重试
                         await new Promise(resolve => setTimeout(resolve, 500));
                         
-                        // 重试发送消息
                         chrome.tabs.sendMessage(tab.id, {
                             action: 'startRegistration',
                             email: email,
@@ -397,7 +388,6 @@ async function startAutoRegister() {
                 handleRegistrationResponse(response);
             });
             
-            // 处理注册响应的函数
             async function handleRegistrationResponse(response) {
                 
                 if (response && response.success) {
@@ -412,7 +402,6 @@ async function startAutoRegister() {
                         addLog('👉 请在页面上完成人机验证', 'warning');
                         addLog('👉 验证完成后点击下方"检查验证码"', 'warning');
                         
-                        // 显示检查验证码按钮
                         checkCodeBtn.style.display = 'block';
                         checkCodeBtn.textContent = '检查验证码';
                     } else {

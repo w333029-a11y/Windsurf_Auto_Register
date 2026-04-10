@@ -48,13 +48,38 @@ const validateApiKey = (req, res, next) => {
 const FETCH_OPTIONS = {
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive'
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
     },
     timeout: 15000
 };
+
+const MAIL_TM_API = 'https://api.mail.tm';
+
+let cachedDomains = null;
+let domainCacheTime = 0;
+
+async function getMailDomains() {
+    const now = Date.now();
+    if (cachedDomains && (now - domainCacheTime) < 3600000) {
+        return cachedDomains;
+    }
+    
+    try {
+        const response = await fetch(`${MAIL_TM_API}/domains`, FETCH_OPTIONS);
+        const data = await response.json();
+        
+        if (data['hydra:member'] && data['hydra:member'].length > 0) {
+            cachedDomains = data['hydra:member'].map(d => d.domain);
+            domainCacheTime = now;
+            return cachedDomains;
+        }
+        return ['mail.tm'];
+    } catch (error) {
+        console.error('[获取域名] 错误:', error.message);
+        return ['mail.tm'];
+    }
+}
 
 app.get('/api/test', (req, res) => {
     res.json({
@@ -67,37 +92,57 @@ app.get('/api/test', (req, res) => {
 
 app.post('/api/generate-email', validateApiKey, async (req, res) => {
     try {
-        console.log('[生成邮箱] 开始请求 1secmail API...');
+        console.log('[生成邮箱] 开始请求 Mail.tm API...');
         
-        const response = await fetch(
-            'https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1',
-            FETCH_OPTIONS
-        );
+        const domains = await getMailDomains();
+        const domain = domains[0];
         
-        console.log('[生成邮箱] 响应状态:', response.status);
+        const username = 'user' + Math.random().toString(36).substring(2, 10);
+        const email = `${username}@${domain}`;
+        const password = 'Pass' + Math.random().toString(36).substring(2, 10) + '!@#';
         
-        if (!response.ok) {
-            const text = await response.text();
-            console.error('[生成邮箱] API 返回错误:', text);
-            throw new Error(`1secmail API 错误 (${response.status}): ${text.substring(0, 100)}`);
+        const createResponse = await fetch(`${MAIL_TM_API}/accounts`, {
+            ...FETCH_OPTIONS,
+            method: 'POST',
+            body: JSON.stringify({
+                address: email,
+                password: password
+            })
+        });
+        
+        if (!createResponse.ok) {
+            const errorText = await createResponse.text();
+            console.error('[生成邮箱] 创建账户失败:', errorText);
+            throw new Error(`创建邮箱账户失败 (${createResponse.status})`);
         }
         
-        const data = await response.json();
-        console.log('[生成邮箱] API 返回数据:', data);
+        const accountData = await createResponse.json();
+        console.log('[生成邮箱] 账户创建成功:', accountData.address);
         
-        if (data && data.length > 0) {
-            const email = data[0];
-            const [username, domain] = email.split('@');
-            
-            res.json({
-                success: true,
-                email: email,
-                username: username,
-                domain: domain
-            });
-        } else {
-            throw new Error('生成邮箱失败: API 返回空数据');
+        const tokenResponse = await fetch(`${MAIL_TM_API}/token`, {
+            ...FETCH_OPTIONS,
+            method: 'POST',
+            body: JSON.stringify({
+                address: email,
+                password: password
+            })
+        });
+        
+        if (!tokenResponse.ok) {
+            throw new Error('获取令牌失败');
         }
+        
+        const tokenData = await tokenResponse.json();
+        
+        res.json({
+            success: true,
+            email: accountData.address,
+            username: username,
+            domain: domain,
+            accountId: accountData.id,
+            token: tokenData.token,
+            password: password
+        });
     } catch (error) {
         console.error('[生成邮箱] 错误:', error.message);
         res.status(500).json({
@@ -110,35 +155,44 @@ app.post('/api/generate-email', validateApiKey, async (req, res) => {
 app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
     try {
         const { email } = req.params;
-        const [username, domain] = email.split('@');
+        const token = req.headers['x-mail-token'];
         
-        if (!username || !domain) {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                error: '无效的邮箱格式'
+                error: '缺少邮件令牌'
             });
         }
         
         console.log(`[获取邮件] 邮箱: ${email}`);
         
-        const response = await fetch(
-            `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`,
-            FETCH_OPTIONS
-        );
+        const response = await fetch(`${MAIL_TM_API}/messages`, {
+            ...FETCH_OPTIONS,
+            headers: {
+                ...FETCH_OPTIONS.headers,
+                'Authorization': `Bearer ${token}`
+            }
+        });
         
         if (!response.ok) {
-            const text = await response.text();
-            console.error('[获取邮件] API 返回错误:', text);
-            throw new Error(`1secmail API 错误 (${response.status})`);
+            throw new Error(`Mail.tm API 错误 (${response.status})`);
         }
         
-        const messages = await response.json();
-        console.log(`[获取邮件] 找到 ${messages ? messages.length : 0} 封邮件`);
+        const data = await response.json();
+        const messages = data['hydra:member'] || [];
+        
+        console.log(`[获取邮件] 找到 ${messages.length} 封邮件`);
         
         res.json({
             success: true,
-            messages: messages || [],
-            count: messages ? messages.length : 0
+            messages: messages.map(msg => ({
+                id: msg.id,
+                from: msg.from?.address || 'unknown',
+                subject: msg.subject,
+                date: msg.createdAt,
+                intro: msg.intro
+            })),
+            count: messages.length
         });
     } catch (error) {
         console.error('[获取邮件] 错误:', error.message);
@@ -152,42 +206,50 @@ app.get('/api/get-messages/:email', validateApiKey, async (req, res) => {
 app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) => {
     try {
         const { email, messageId } = req.params;
-        const [username, domain] = email.split('@');
+        const token = req.headers['x-mail-token'];
         
-        if (!username || !domain) {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                error: '无效的邮箱格式'
+                error: '缺少邮件令牌'
             });
         }
         
         console.log(`[获取邮件详情] 邮箱: ${email}, 消息ID: ${messageId}`);
         
-        const response = await fetch(
-            `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${messageId}`,
-            FETCH_OPTIONS
-        );
+        const response = await fetch(`${MAIL_TM_API}/messages/${messageId}`, {
+            ...FETCH_OPTIONS,
+            headers: {
+                ...FETCH_OPTIONS.headers,
+                'Authorization': `Bearer ${token}`
+            }
+        });
         
         if (!response.ok) {
-            const text = await response.text();
-            console.error('[获取邮件详情] API 返回错误:', text);
-            throw new Error(`1secmail API 错误 (${response.status})`);
+            throw new Error(`Mail.tm API 错误 (${response.status})`);
         }
         
         const message = await response.json();
         
         let verificationCode = null;
-        if (message && message.body) {
-            const codeMatch = message.body.match(/\b[A-Z0-9]{6}\b/);
-            if (codeMatch) {
-                verificationCode = codeMatch[0];
-                console.log(`[获取邮件详情] 找到验证码: ${verificationCode}`);
-            }
+        const text = message.text || message.html || '';
+        const codeMatch = text.match(/\b[A-Z0-9]{6}\b/);
+        if (codeMatch) {
+            verificationCode = codeMatch[0];
+            console.log(`[获取邮件详情] 找到验证码: ${verificationCode}`);
         }
         
         res.json({
             success: true,
-            message: message,
+            message: {
+                id: message.id,
+                from: message.from?.address || 'unknown',
+                subject: message.subject,
+                body: message.text || message.html,
+                html: message.html,
+                text: message.text,
+                date: message.createdAt
+            },
             verificationCode: verificationCode
         });
     } catch (error) {
@@ -202,17 +264,17 @@ app.get('/api/get-message/:email/:messageId', validateApiKey, async (req, res) =
 app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
     try {
         const { email } = req.params;
-        const maxAttempts = 30;
-        const interval = 3000;
+        const token = req.headers['x-mail-token'];
         
-        const [username, domain] = email.split('@');
-        
-        if (!username || !domain) {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                error: '无效的邮箱格式'
+                error: '缺少邮件令牌'
             });
         }
+        
+        const maxAttempts = 30;
+        const interval = 3000;
         
         console.log(`[等待验证码] 开始等待: ${email}`);
         
@@ -221,38 +283,51 @@ app.get('/api/wait-for-code/:email', validateApiKey, async (req, res) => {
         let attempts = 0;
         const checkMessages = async () => {
             try {
-                const response = await fetch(
-                    `https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`,
-                    FETCH_OPTIONS
-                );
+                const response = await fetch(`${MAIL_TM_API}/messages`, {
+                    ...FETCH_OPTIONS,
+                    headers: {
+                        ...FETCH_OPTIONS.headers,
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 
                 if (!response.ok) {
                     throw new Error(`API 错误 (${response.status})`);
                 }
                 
-                const messages = await response.json();
+                const data = await response.json();
+                const messages = data['hydra:member'] || [];
                 
-                if (messages && messages.length > 0) {
+                if (messages.length > 0) {
                     const latestMessage = messages[0];
-                    const detailResponse = await fetch(
-                        `https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${latestMessage.id}`,
-                        FETCH_OPTIONS
-                    );
+                    
+                    const detailResponse = await fetch(`${MAIL_TM_API}/messages/${latestMessage.id}`, {
+                        ...FETCH_OPTIONS,
+                        headers: {
+                            ...FETCH_OPTIONS.headers,
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
                     const detail = await detailResponse.json();
                     
                     let verificationCode = null;
-                    if (detail && detail.body) {
-                        const codeMatch = detail.body.match(/\b[A-Z0-9]{6}\b/);
-                        if (codeMatch) {
-                            verificationCode = codeMatch[0];
-                            console.log(`[等待验证码] 找到验证码: ${verificationCode}`);
-                        }
+                    const text = detail.text || detail.html || '';
+                    const codeMatch = text.match(/\b[A-Z0-9]{6}\b/);
+                    if (codeMatch) {
+                        verificationCode = codeMatch[0];
+                        console.log(`[等待验证码] 找到验证码: ${verificationCode}`);
                     }
                     
                     return res.json({
                         success: true,
                         code: verificationCode,
-                        message: detail
+                        message: {
+                            id: detail.id,
+                            from: detail.from?.address || 'unknown',
+                            subject: detail.subject,
+                            body: detail.text || detail.html,
+                            date: detail.createdAt
+                        }
                     });
                 }
                 
@@ -298,6 +373,7 @@ app.listen(PORT, () => {
     console.log(`🚀 服务器运行在端口 ${PORT}`);
     console.log(`📧 API密钥: ${API_KEY.substring(0, 10)}...`);
     console.log(`🌐 环境: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📬 使用 Mail.tm API`);
 });
 
 module.exports = app;
