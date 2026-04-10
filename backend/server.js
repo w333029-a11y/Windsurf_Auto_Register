@@ -94,7 +94,7 @@ class TempMailService {
 
 class TempMailOrg extends TempMailService {
     constructor() {
-        super('TempMail.org', 1);
+        super('TempMail.org', 2);
         this.apiUrl = 'https://www.1secmail.com/api/v1/';
     }
     
@@ -192,7 +192,7 @@ class TempMailOrg extends TempMailService {
 
 class GuerrillaMail extends TempMailService {
     constructor() {
-        super('Guerrilla Mail', 2);
+        super('Guerrilla Mail', 1);
         this.apiUrl = 'https://api.guerrillamail.com';
     }
     
