@@ -8,6 +8,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || 'wsr-2024-default-key';
 
+// 信任代理（Render 环境需要）
+app.set('trust proxy', 1);
+
 // 安全中间件
 app.use(helmet());
 
