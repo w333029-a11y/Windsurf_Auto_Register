@@ -11,14 +11,28 @@ const API_KEY = process.env.API_KEY || 'wsr-2024-default-key';
 // 信任代理（Render 环境需要）
 app.set('trust proxy', 1);
 
-// 安全中间件
-app.use(helmet());
+// 安全中间件（宽松配置，允许跨域）
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://www.1secmail.com"]
+        }
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: false
+}));
 
 // CORS配置
 app.use(cors({
-    origin: ['https://windsurf.com', 'https://*.windsurf.com', 'chrome-extension://*'],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'x-api-key']
+    origin: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-api-key', 'X-API-Key'],
+    credentials: true
 }));
 
 // 限流配置
