@@ -574,7 +574,7 @@ async function tryServices(operation, email, token) {
     for (const service of sortedServices) {
         try {
             console.log(`[尝试服务] 使用 ${service.name}...`);
-            const result = await operation.call(service, email, token);
+            const result = await operation(service, email, token);
             console.log(`[尝试服务] ${service.name} 成功!`);
             return { service: service.name, result };
         } catch (error) {

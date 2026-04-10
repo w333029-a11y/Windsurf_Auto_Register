@@ -17,7 +17,7 @@ cp config.private.js.example config.private.js
 ```javascript
 const PRIVATE_CONFIG = {
     API_KEY: '你的实际API密钥',
-    BACKEND_URL: 'https://windsurf-auto-register.onrender.com'
+    BACKEND_URL: 'https://windsurf-auto-register-backend.onrender.com'
 };
 ```
 

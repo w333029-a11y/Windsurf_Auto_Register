@@ -6,7 +6,7 @@ const PRIVATE_CONFIG = {
     API_KEY: 'YOUR_ACTUAL_API_KEY_HERE',
     
     // 后端服务器地址
-    BACKEND_URL: 'https://windsurf-auto-register.onrender.com'
+    BACKEND_URL: 'https://windsurf-auto-register-backend.onrender.com'
 };
 
 // 导出配置

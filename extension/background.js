@@ -16,7 +16,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         
         // 设置默认配置
         chrome.storage.sync.set({
-            backendUrl: 'https://windsurf-auto-register.onrender.com'
+            backendUrl: 'https://windsurf-auto-register-backend.onrender.com'
         });
         chrome.storage.local.set({
             autoFill: true

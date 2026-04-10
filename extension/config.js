@@ -5,7 +5,7 @@ const CONFIG = typeof PRIVATE_CONFIG !== 'undefined' ? PRIVATE_CONFIG : {
     API_KEY: 'YOUR_API_KEY_HERE',
     
     // 默认后端地址
-    DEFAULT_BACKEND_URL: 'https://windsurf-auto-register.onrender.com',
+    DEFAULT_BACKEND_URL: 'https://windsurf-auto-register-backend.onrender.com',
     
     // 请求头配置
     getHeaders: function() {
