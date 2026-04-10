@@ -238,14 +238,15 @@ class GuerrillaMail extends TempMailService {
             
             for (const line of lines) {
                 if (line.includes('|')) {
-                const parts = line.split('|');
-                if (parts.length >= 3) {
-                    messages.push({
-                        id: parts[0],
-                        from: parts[1],
-                        subject: parts[2],
-                        date: new Date().toISOString()
-                    });
+                    const parts = line.split('|');
+                    if (parts.length >= 3) {
+                        messages.push({
+                            id: parts[0],
+                            from: parts[1],
+                            subject: parts[2],
+                            date: new Date().toISOString()
+                        });
+                    }
                 }
             }
             
